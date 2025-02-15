@@ -1,0 +1,24 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.5.2.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "nm-be-web-games", "nm-be-web-games.csproj", "{974A15E7-22D5-F3C5-A37A-8A2AD2DF7D9C}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{974A15E7-22D5-F3C5-A37A-8A2AD2DF7D9C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{974A15E7-22D5-F3C5-A37A-8A2AD2DF7D9C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{974A15E7-22D5-F3C5-A37A-8A2AD2DF7D9C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{974A15E7-22D5-F3C5-A37A-8A2AD2DF7D9C}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {3DD31E46-90B4-408B-A854-A8B4D80D8377}
+	EndGlobalSection
+EndGlobal
