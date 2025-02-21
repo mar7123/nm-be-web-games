@@ -1,14 +1,34 @@
-var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddControllers();
-builder.Services.AddSwaggerGen();
+using nm_be_web_games.Configuration;
+using Serilog;
 
-var app = builder.Build();
-if (app.Environment.IsDevelopment())
+Log.Logger = SerilogConfigurator.CreateLogger();
+
+try
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
+    Log.Logger.Information("Starting up...");
+    var builder = WebApplication.CreateBuilder(args);
+    builder.Services.AddControllers();
+    builder.Services.AddEndpointsApiExplorer();
+    builder.Services.AddSwaggerGen();
+
+    var app = builder.Build();
+    if (app.Environment.IsDevelopment())
+    {
+        app.UseSwagger();
+        app.UseSwaggerUI();
+    }
+    app.UseHttpsRedirection();
+    app.MapControllers();
+    app.UseWebSockets();
+    app.Run();
+
 }
-app.UseHttpsRedirection();
-app.MapControllers();
-app.UseWebSockets();
-app.Run();
+catch (Exception ex)
+{
+    Log.Logger.Fatal(ex, "Application start-up failed");
+    throw;
+}
+finally
+{
+    Log.CloseAndFlush();
+}

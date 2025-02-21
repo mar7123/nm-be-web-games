@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using nm_be_web_games.Models;
+using Serilog;
 
 namespace nm_be_web_games.Controllers
 {
@@ -11,7 +12,7 @@ namespace nm_be_web_games.Controllers
     {
         private static ConcurrentDictionary<string, WebSocket> _clients = new ConcurrentDictionary<string, WebSocket>();
         [Route("/ws")]
-        public async Task WSRegisterASD()
+        public async Task WSRegister()
         {
             if (HttpContext.WebSockets.IsWebSocketRequest)
             {
@@ -19,7 +20,7 @@ namespace nm_be_web_games.Controllers
                 string clientId = Guid.NewGuid().ToString();
 
                 _clients.TryAdd(clientId, socket);
-                Console.WriteLine($"Client {clientId} connected.");
+                Log.Logger.Information($"Client {clientId} connected.");
 
                 await HandleWebSocketRequest(socket, clientId);
             }
@@ -49,18 +50,18 @@ namespace nm_be_web_games.Controllers
                         GameState? state = JsonSerializer.Deserialize<GameState>(message);
                         if (state != null)
                         {
-                            Console.WriteLine($"Result {message}");
+                            Log.Logger.Information($"Result {message}");
                         }
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"Error Deserializing {ex}");
+                        Log.Logger.Error($"Error Deserializing\n{ex}");
                     }
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error with client {clientId}: {ex.Message}");
+                Log.Logger.Error($"Error with client {clientId}: {ex.Message}");
             }
             finally
             {
@@ -87,7 +88,7 @@ namespace nm_be_web_games.Controllers
                         }
                     }
                 }
-                Console.WriteLine($"Client {clientId} disconnected.");
+                Log.Logger.Information($"Client {clientId} disconnected.");
             }
         }
 
