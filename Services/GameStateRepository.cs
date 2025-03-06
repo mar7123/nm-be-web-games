@@ -7,7 +7,7 @@ namespace nm_be_web_games.Repositories;
 public class GameStateRepository
 {
     private readonly ConcurrentDictionary<string, GameState> _gameStates = new ConcurrentDictionary<string, GameState>();
-
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> _locks = new();
     public GameStateRepository()
     {
     }
@@ -17,21 +17,28 @@ public class GameStateRepository
         _gameStates.TryGetValue(stateId, out var state);
         return state;
     }
-
     public bool AddGameState(string stateId, GameState state)
     {
-        return _gameStates.TryAdd(stateId, state);
+        return _gameStates.TryAdd(stateId, state) && _locks.TryAdd(stateId, new SemaphoreSlim(1, 1));
     }
-    public bool UpdateGameState(string stateId, GameState state)
+    public async Task<bool> UpdateGameState(string stateId, Func<GameState, Task> update)
     {
-        lock (this)
+        _locks.TryGetValue(stateId, out var stateLock);
+        GameState? state = GetGameState(stateId);
+        if (state == null || stateLock == null) return false;
+        await stateLock.WaitAsync();
+        try
         {
-            GameState? oldState = GetGameState(stateId);
-            return oldState != null ? _gameStates.TryUpdate(stateId, state, oldState) : false;
+            await update(state);
+            return true;
+        }
+        finally
+        {
+            stateLock.Release();
         }
     }
     public bool RemoveGameState(string stateId)
     {
-        return _gameStates.TryRemove(stateId, out _);
+        return _gameStates.TryRemove(stateId, out _) && _locks.TryRemove(stateId, out _);
     }
 }

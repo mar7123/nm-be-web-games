@@ -44,8 +44,12 @@ namespace nm_be_web_games.Controllers
                         PaddleState? paddleState = state.GetPaddleState(playerId);
                         if (paddleState == null)
                         {
-                            paddleState = new() { Id = playerId };
-                            state.RegisterNewPaddle(paddleState);
+                            paddleState = new PaddleState(playerId);
+                            await _gameStateRepository.UpdateGameState(roomId, (currentState) =>
+                              {
+                                  currentState.RegisterNewPaddle(paddleState);
+                                  return Task.CompletedTask;
+                              });
                         }
                         WebSocket? webSocket = _webSocketRepository.GetWebSocket(paddleState.Id);
                         if (webSocket == null)
@@ -70,7 +74,9 @@ namespace nm_be_web_games.Controllers
                     else
                     {
                         Log.Logger.Information($"room {roomId} started.");
-                        GameState newState = new GameState { Id = roomId, Paddle1 = new PaddleState { Id = playerId } };
+                        GameState newState = new GameState(roomId);
+                        newState.SetPaddle1(new PaddleState(playerId));
+                        if (newState.Paddle1 == null) return Results.BadRequest();
                         bool addStateSuccess = _gameStateRepository.AddGameState(roomId, newState);
                         if (!addStateSuccess)
                         {
@@ -120,10 +126,20 @@ namespace nm_be_web_games.Controllers
                     string message = Encoding.UTF8.GetString(buffer, 0, result.Count);
                     try
                     {
-                        GameState? state = JsonSerializer.Deserialize<GameState>(message);
-                        if (state != null)
+                        GameState? newState = JsonSerializer.Deserialize<GameState>(message);
+                        PaddleState? newPaddleState = newState?.GetPaddleState(paddleStateId);
+                        if (newPaddleState != null)
                         {
-                            _gameStateRepository.UpdateGameState(stateId, state);
+                            await _gameStateRepository.UpdateGameState(stateId, (currentState) =>
+                             {
+                                 PaddleState? paddleState = currentState.GetPaddleState(paddleStateId);
+                                 if (paddleState != null)
+                                 {
+                                     paddleState.Coordinate.SetX(newPaddleState.Coordinate.X);
+                                     paddleState.Coordinate.SetY(newPaddleState.Coordinate.Y);
+                                 }
+                                 return Task.CompletedTask;
+                             });
                             Log.Logger.Information($"Result {message}");
                         }
                     }
