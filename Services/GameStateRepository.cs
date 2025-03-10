@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Concurrent;
 using nm_be_web_games.Models;
 
@@ -39,6 +38,8 @@ public class GameStateRepository
     }
     public bool RemoveGameState(string stateId)
     {
-        return _gameStates.TryRemove(stateId, out _) && _locks.TryRemove(stateId, out _);
+        bool removeSemaphore = _locks.TryRemove(stateId, out var semaphoreSlim);
+        semaphoreSlim?.Dispose();
+        return _gameStates.TryRemove(stateId, out _) && removeSemaphore;
     }
 }

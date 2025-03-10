@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Concurrent;
 using nm_be_web_games.Models;
 using Serilog;
@@ -25,7 +24,7 @@ public class TaskManager
         {
             try
             {
-                Log.Logger.Information($"Task with ID {taskId} is running in thread {Environment.CurrentManagedThreadId}.");
+                Log.Logger.Information($"Task with ID {taskId}");
                 await taskFunction(parameters);
             }
             catch (OperationCanceledException)

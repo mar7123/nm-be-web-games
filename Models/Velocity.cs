@@ -1,19 +1,17 @@
-using System;
-
 namespace nm_be_web_games.Models;
 
 public class Velocity
 {
-    public float Vx { get; private set; } = 0;
-    public float Vy { get; private set; } = 0;
+    public float vX { get; private set; } = 0;
+    public float vY { get; private set; } = 0;
 
     public Velocity() { }
-    public void SetVx(float Vx)
+    public void SetVX(float vX)
     {
-        this.Vx = Vx;
+        this.vX = vX;
     }
-    public void SetVy(float Vy)
+    public void SetVY(float vY)
     {
-        this.Vy = Vy;
+        this.vY = vY;
     }
 }

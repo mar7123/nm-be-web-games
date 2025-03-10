@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
@@ -51,7 +50,7 @@ namespace nm_be_web_games.Controllers
                                   return Task.CompletedTask;
                               });
                         }
-                        WebSocket? webSocket = _webSocketRepository.GetWebSocket(paddleState.Id);
+                        WebSocket? webSocket = _webSocketRepository.GetWebSocket(paddleState.id);
                         if (webSocket == null)
                         {
                             webSocket = await HttpContext.WebSockets.AcceptWebSocketAsync();
@@ -62,21 +61,21 @@ namespace nm_be_web_games.Controllers
                                 return Results.BadRequest();
                             }
                         }
-                        Log.Logger.Information($"Client {paddleState.Id} connected.");
+                        Log.Logger.Information($"Client {paddleState.id} connected.");
                         if (!_taskManager.IsTaskRunning(roomId))
                         {
                             var broadCastFunc = RunBroadcastLoop;
                             var parameters = new GameStateTaskParameters { Id = roomId, Cts = new CancellationTokenSource(), StateId = roomId };
                             bool addTaskSuccess = _taskManager.StartTask(broadCastFunc, parameters);
                         }
-                        socketReturnHandled = await HandleWebSocketRequest(webSocket, state.Id, paddleState.Id);
+                        socketReturnHandled = await HandleWebSocketRequest(webSocket, state.id, paddleState.id);
                     }
                     else
                     {
                         Log.Logger.Information($"room {roomId} started.");
                         GameState newState = new GameState(roomId);
                         newState.SetPaddle1(new PaddleState(playerId));
-                        if (newState.Paddle1 == null) return Results.BadRequest();
+                        if (newState.paddle1 == null) return Results.BadRequest();
                         bool addStateSuccess = _gameStateRepository.AddGameState(roomId, newState);
                         if (!addStateSuccess)
                         {
@@ -98,7 +97,7 @@ namespace nm_be_web_games.Controllers
                             _webSocketRepository.RemoveWebSocket(playerId);
                             return Results.BadRequest();
                         }
-                        socketReturnHandled = await HandleWebSocketRequest(webSocket, newState.Id, newState.Paddle1.Id);
+                        socketReturnHandled = await HandleWebSocketRequest(webSocket, newState.id, newState.paddle1.id);
                     }
                 }
                 else
@@ -135,8 +134,8 @@ namespace nm_be_web_games.Controllers
                                  PaddleState? paddleState = currentState.GetPaddleState(paddleStateId);
                                  if (paddleState != null)
                                  {
-                                     paddleState.Coordinate.SetX(newPaddleState.Coordinate.X);
-                                     paddleState.Coordinate.SetY(newPaddleState.Coordinate.Y);
+                                     paddleState.coordinate.SetX(newPaddleState.coordinate.x);
+                                     paddleState.coordinate.SetY(newPaddleState.coordinate.y);
                                  }
                                  return Task.CompletedTask;
                              });
@@ -183,23 +182,25 @@ namespace nm_be_web_games.Controllers
                     {
                         GameState? state = _gameStateRepository.GetGameState(parameters.StateId);
                         if (state == null) break;
-                        var paddle1 = state.Paddle1;
-                        var paddle2 = state.Paddle2;
-                        WebSocket? webSocket1 = paddle1 != null ? _webSocketRepository.GetWebSocket(paddle1.Id) : null;
-                        WebSocket? webSocket2 = paddle2 != null ? _webSocketRepository.GetWebSocket(paddle2.Id) : null;
+                        var paddle1 = state.paddle1;
+                        var paddle2 = state.paddle2;
+                        WebSocket? webSocket1 = paddle1 != null ? _webSocketRepository.GetWebSocket(paddle1.id) : null;
+                        WebSocket? webSocket2 = paddle2 != null ? _webSocketRepository.GetWebSocket(paddle2.id) : null;
                         if (webSocket1?.State != WebSocketState.Open && webSocket2?.State != WebSocketState.Open) break;
 
                         string gameStateJson = JsonSerializer.Serialize(state);
                         byte[] message = Encoding.UTF8.GetBytes(gameStateJson);
 
+                        List<Task> tasks = new List<Task>(2);
                         if (webSocket1 != null)
                         {
-                            await webSocket1.SendAsync(new ArraySegment<byte>(message), WebSocketMessageType.Text, true, CancellationToken.None);
+                            tasks.Append(webSocket1.SendAsync(new ArraySegment<byte>(message), WebSocketMessageType.Text, true, CancellationToken.None));
                         }
                         if (webSocket2 != null)
                         {
-                            await webSocket2.SendAsync(new ArraySegment<byte>(message), WebSocketMessageType.Text, true, CancellationToken.None);
+                            tasks.Append(webSocket2.SendAsync(new ArraySegment<byte>(message), WebSocketMessageType.Text, true, CancellationToken.None));
                         }
+                        await Task.WhenAll(tasks);
 
                         await Task.Delay(tickInterval);
                     }

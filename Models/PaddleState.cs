@@ -1,14 +1,10 @@
-using System;
-
 namespace nm_be_web_games.Models;
 
-public class PaddleState
+public class PaddleState : PuckState
 {
-    public string Id { get; private set; }
-    public Coordinate Coordinate { get; } = new Coordinate();
-
-    public PaddleState(string Id)
+    public string id { get; private set; }
+    public PaddleState(string id)
     {
-        this.Id = Id;
+        this.id = id;
     }
 }

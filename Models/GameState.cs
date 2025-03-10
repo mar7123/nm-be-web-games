@@ -1,50 +1,48 @@
-using System;
-
 namespace nm_be_web_games.Models;
 
 public class GameState
 {
-    public string Id { get; private set; }
-    public PuckState Puck { get; } = new PuckState();
-    public PaddleState? Paddle1 { get; private set; }
-    public PaddleState? Paddle2 { get; private set; }
-    public int Score1 { get; private set; } = 0;
-    public int Score2 { get; private set; } = 0;
+    public string id { get; private set; }
+    public PuckState puck { get; } = new PuckState();
+    public PaddleState? paddle1 { get; private set; }
+    public PaddleState? paddle2 { get; private set; }
+    public int score1 { get; private set; } = 0;
+    public int score2 { get; private set; } = 0;
 
-    public GameState(string Id)
+    public GameState(string id)
     {
-        this.Id = Id;
+        this.id = id;
     }
 
     public void SetPaddle1(PaddleState paddle)
     {
-        Paddle1 = paddle;
+        paddle1 = paddle;
     }
     public void SetPaddle2(PaddleState paddle)
     {
-        Paddle2 = paddle;
+        paddle2 = paddle;
     }
     public PaddleState? GetPaddleState(string paddleId)
     {
-        if (Paddle1 != null && Paddle1.Id == paddleId)
+        if (paddle1 != null && paddle1.id == paddleId)
         {
-            return Paddle1;
+            return paddle1;
         }
-        if (Paddle2 != null && Paddle2.Id == paddleId)
+        if (paddle2 != null && paddle2.id == paddleId)
         {
-            return Paddle2;
+            return paddle2;
         }
         return null;
     }
     public void RegisterNewPaddle(PaddleState newPaddle)
     {
-        if (Paddle1 == null)
+        if (paddle1 == null)
         {
-            Paddle1 = newPaddle;
+            paddle1 = newPaddle;
         }
-        else if (Paddle2 == null)
+        else if (paddle2 == null)
         {
-            Paddle2 = newPaddle;
+            paddle2 = newPaddle;
         }
     }
 }
