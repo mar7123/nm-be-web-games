@@ -125,8 +125,7 @@ namespace nm_be_web_games.Controllers
                     string message = Encoding.UTF8.GetString(buffer, 0, result.Count);
                     try
                     {
-                        GameState? newState = JsonSerializer.Deserialize<GameState>(message);
-                        PaddleState? newPaddleState = newState?.GetPaddleState(paddleStateId);
+                        PaddleState? newPaddleState = JsonSerializer.Deserialize<PaddleState>(message);
                         if (newPaddleState != null)
                         {
                             await _gameStateRepository.UpdateGameState(stateId, (currentState) =>
@@ -136,6 +135,8 @@ namespace nm_be_web_games.Controllers
                                  {
                                      paddleState.coordinate.SetX(newPaddleState.coordinate.x);
                                      paddleState.coordinate.SetY(newPaddleState.coordinate.y);
+                                     paddleState.velocity.SetVX(newPaddleState.velocity.vX);
+                                     paddleState.velocity.SetVY(newPaddleState.velocity.vY);
                                  }
                                  return Task.CompletedTask;
                              });

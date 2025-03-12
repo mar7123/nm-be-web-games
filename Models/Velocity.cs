@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace nm_be_web_games.Models;
 
 public class Velocity
@@ -12,6 +14,13 @@ public class Velocity
     }
     public void SetVY(float vY)
     {
+        this.vY = vY;
+    }
+
+    [JsonConstructor]
+    public Velocity(float vX, float vY)
+    {
+        this.vX = vX;
         this.vY = vY;
     }
 }

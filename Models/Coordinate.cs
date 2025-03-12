@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace nm_be_web_games.Models;
 
 public class Coordinate
@@ -11,6 +13,13 @@ public class Coordinate
     }
     public void SetY(float y)
     {
+        this.y = y;
+    }
+
+    [JsonConstructor]
+    public Coordinate(float x, float y)
+    {
+        this.x = x;
         this.y = y;
     }
 }
