@@ -2,8 +2,9 @@ using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
-using nm_be_web_games.Models;
+using nm_be_web_games.Models.AirHockey;
 using nm_be_web_games.Models.Task;
+using nm_be_web_games.Models.WSMessage;
 using nm_be_web_games.Repositories;
 using nm_be_web_games.Services;
 using Serilog;
@@ -12,7 +13,8 @@ namespace nm_be_web_games.Controllers
 {
     public class WebSocketController : ControllerBase
     {
-        private readonly int _tickRate = 20;
+        private static readonly int _tickRate = 20;
+        private static readonly int _tickInterval = 1000 / _tickRate;
         private readonly WebSocketRepository _webSocketRepository;
         private readonly GameStateRepository _gameStateRepository;
         private readonly TaskManager _taskManager;
@@ -36,7 +38,7 @@ namespace nm_be_web_games.Controllers
                 {
                     string roomId = roomIdParam.ToString();
                     string playerId = playerIdParam.ToString();
-                    GameState? state = _gameStateRepository.GetGameState(roomId);
+                    AirHockeyGameState? state = _gameStateRepository.GetGameState(roomId);
                     if (state != null)
                     {
                         Log.Logger.Information($"room {roomId} continued.");
@@ -68,12 +70,25 @@ namespace nm_be_web_games.Controllers
                             var parameters = new GameStateTaskParameters { Id = roomId, Cts = new CancellationTokenSource(), StateId = roomId };
                             bool addTaskSuccess = _taskManager.StartTask(broadCastFunc, parameters);
                         }
+                        string gameConfigJson = JsonSerializer.Serialize(
+                            new WSMessageInit
+                            {
+                                config = new AirHockeyGameConfig
+                                {
+                                    roomId = roomId,
+                                    playerId = playerId,
+                                    playerType = state.GetAirHockeyPlayerType(playerId),
+                                    tickrate = _tickInterval,
+                                }
+                            });
+                        byte[] message = Encoding.UTF8.GetBytes(gameConfigJson);
+                        await webSocket.SendAsync(new ArraySegment<byte>(message), WebSocketMessageType.Text, true, CancellationToken.None);
                         socketReturnHandled = await HandleWebSocketRequest(webSocket, state.id, paddleState.id);
                     }
                     else
                     {
                         Log.Logger.Information($"room {roomId} started.");
-                        GameState newState = new GameState(roomId);
+                        AirHockeyGameState newState = new AirHockeyGameState(roomId);
                         newState.SetPaddle1(new PaddleState(playerId));
                         if (newState.paddle1 == null) return Results.BadRequest();
                         bool addStateSuccess = _gameStateRepository.AddGameState(roomId, newState);
@@ -97,6 +112,19 @@ namespace nm_be_web_games.Controllers
                             _webSocketRepository.RemoveWebSocket(playerId);
                             return Results.BadRequest();
                         }
+                        string gameConfigJson = JsonSerializer.Serialize(
+                           new WSMessageInit
+                           {
+                               config = new AirHockeyGameConfig
+                               {
+                                   roomId = roomId,
+                                   playerId = playerId,
+                                   playerType = newState.GetAirHockeyPlayerType(playerId),
+                                   tickrate = _tickInterval,
+                               }
+                           });
+                        byte[] message = Encoding.UTF8.GetBytes(gameConfigJson);
+                        await webSocket.SendAsync(new ArraySegment<byte>(message), WebSocketMessageType.Text, true, CancellationToken.None);
                         socketReturnHandled = await HandleWebSocketRequest(webSocket, newState.id, newState.paddle1.id);
                     }
                 }
@@ -140,7 +168,6 @@ namespace nm_be_web_games.Controllers
                                  }
                                  return Task.CompletedTask;
                              });
-                            Log.Logger.Information($"Result {message}");
                         }
                     }
                     catch (Exception ex)
@@ -176,12 +203,11 @@ namespace nm_be_web_games.Controllers
         {
             if (baseParameters is GameStateTaskParameters parameters)
             {
-                int tickInterval = 1000 / _tickRate;
                 try
                 {
                     while (!parameters.Cts.Token.IsCancellationRequested)
                     {
-                        GameState? state = _gameStateRepository.GetGameState(parameters.StateId);
+                        AirHockeyGameState? state = _gameStateRepository.GetGameState(parameters.StateId);
                         if (state == null) break;
                         var paddle1 = state.paddle1;
                         var paddle2 = state.paddle2;
@@ -189,7 +215,7 @@ namespace nm_be_web_games.Controllers
                         WebSocket? webSocket2 = paddle2 != null ? _webSocketRepository.GetWebSocket(paddle2.id) : null;
                         if (webSocket1?.State != WebSocketState.Open && webSocket2?.State != WebSocketState.Open) break;
 
-                        string gameStateJson = JsonSerializer.Serialize(state);
+                        string gameStateJson = JsonSerializer.Serialize(new WSMessageGameState { state = state });
                         byte[] message = Encoding.UTF8.GetBytes(gameStateJson);
 
                         List<Task> tasks = new List<Task>(2);
@@ -203,7 +229,7 @@ namespace nm_be_web_games.Controllers
                         }
                         await Task.WhenAll(tasks);
 
-                        await Task.Delay(tickInterval);
+                        await Task.Delay(_tickInterval);
                     }
 
                 }

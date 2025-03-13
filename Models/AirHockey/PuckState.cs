@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace nm_be_web_games.Models;
+namespace nm_be_web_games.Models.AirHockey;
 
 public class PuckState
 {

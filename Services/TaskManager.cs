@@ -1,5 +1,5 @@
 using System.Collections.Concurrent;
-using nm_be_web_games.Models;
+using nm_be_web_games.Models.Task;
 using Serilog;
 
 namespace nm_be_web_games.Services;

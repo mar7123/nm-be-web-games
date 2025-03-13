@@ -1,6 +1,6 @@
-namespace nm_be_web_games.Models;
+namespace nm_be_web_games.Models.AirHockey;
 
-public class GameState
+public class AirHockeyGameState
 {
     public string id { get; private set; }
     public PuckState puck { get; } = new PuckState();
@@ -9,7 +9,7 @@ public class GameState
     public int score1 { get; private set; } = 0;
     public int score2 { get; private set; } = 0;
 
-    public GameState(string id)
+    public AirHockeyGameState(string id)
     {
         this.id = id;
     }
@@ -33,6 +33,19 @@ public class GameState
             return paddle2;
         }
         return null;
+    }
+
+    public AirHockeyPlayerType GetAirHockeyPlayerType(string paddleId)
+    {
+        if (paddle1 != null && paddle1.id == paddleId)
+        {
+            return AirHockeyPlayerType.PLAYER_1;
+        }
+        if (paddle2 != null && paddle2.id == paddleId)
+        {
+            return AirHockeyPlayerType.PLAYER_2;
+        }
+        return AirHockeyPlayerType.PLAYER_2;
     }
     public void RegisterNewPaddle(PaddleState newPaddle)
     {
