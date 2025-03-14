@@ -2,6 +2,7 @@ using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
+using nm_be_web_games.Models;
 using nm_be_web_games.Models.AirHockey;
 using nm_be_web_games.Models.Task;
 using nm_be_web_games.Models.WSMessage;
@@ -13,7 +14,7 @@ namespace nm_be_web_games.Controllers
 {
     public class WebSocketController : ControllerBase
     {
-        private static readonly int _tickRate = 20;
+        private static readonly int _tickRate = 50;
         private static readonly int _tickInterval = 1000 / _tickRate;
         private readonly WebSocketRepository _webSocketRepository;
         private readonly GameStateRepository _gameStateRepository;
@@ -41,17 +42,23 @@ namespace nm_be_web_games.Controllers
                     AirHockeyGameState? state = _gameStateRepository.GetGameState(roomId);
                     if (state != null)
                     {
-                        Log.Logger.Information($"room {roomId} continued.");
                         PaddleState? paddleState = state.GetPaddleState(playerId);
                         if (paddleState == null)
                         {
                             paddleState = new PaddleState(playerId);
+                            bool registerNewPaddleSuccess = false;
                             await _gameStateRepository.UpdateGameState(roomId, (currentState) =>
                               {
-                                  currentState.RegisterNewPaddle(paddleState);
+                                  registerNewPaddleSuccess = currentState.RegisterNewPaddle(paddleState);
                                   return Task.CompletedTask;
                               });
+                            if (!registerNewPaddleSuccess)
+                            {
+                                return Results.BadRequest();
+
+                            }
                         }
+                        Log.Logger.Information($"room {roomId} continued.");
                         WebSocket? webSocket = _webSocketRepository.GetWebSocket(paddleState.id);
                         if (webSocket == null)
                         {
@@ -63,6 +70,17 @@ namespace nm_be_web_games.Controllers
                                 return Results.BadRequest();
                             }
                         }
+                        AirHockeyGameConfig config = new AirHockeyGameConfig
+                        {
+                            roomId = roomId,
+                            playerId = playerId,
+                            playerType = state.GetAirHockeyPlayerType(playerId),
+                            tickInterval = _tickInterval,
+                        };
+
+                        string gameConfigJson = JsonSerializer.Serialize(new WSMessageInit { config = config });
+                        byte[] message = Encoding.UTF8.GetBytes(gameConfigJson);
+                        await webSocket.SendAsync(new ArraySegment<byte>(message), WebSocketMessageType.Text, true, CancellationToken.None);
                         Log.Logger.Information($"Client {paddleState.id} connected.");
                         if (!_taskManager.IsTaskRunning(roomId))
                         {
@@ -70,25 +88,22 @@ namespace nm_be_web_games.Controllers
                             var parameters = new GameStateTaskParameters { Id = roomId, Cts = new CancellationTokenSource(), StateId = roomId };
                             bool addTaskSuccess = _taskManager.StartTask(broadCastFunc, parameters);
                         }
-                        string gameConfigJson = JsonSerializer.Serialize(
-                            new WSMessageInit
-                            {
-                                config = new AirHockeyGameConfig
-                                {
-                                    roomId = roomId,
-                                    playerId = playerId,
-                                    playerType = state.GetAirHockeyPlayerType(playerId),
-                                    tickrate = _tickInterval,
-                                }
-                            });
-                        byte[] message = Encoding.UTF8.GetBytes(gameConfigJson);
-                        await webSocket.SendAsync(new ArraySegment<byte>(message), WebSocketMessageType.Text, true, CancellationToken.None);
                         socketReturnHandled = await HandleWebSocketRequest(webSocket, state.id, paddleState.id);
                     }
                     else
                     {
                         Log.Logger.Information($"room {roomId} started.");
-                        AirHockeyGameState newState = new AirHockeyGameState(roomId);
+                        AirHockeyGameConfig config = new AirHockeyGameConfig
+                        {
+                            roomId = roomId,
+                            playerId = playerId,
+                            playerType = AirHockeyPlayerType.PLAYER_1,
+                            tickInterval = _tickInterval,
+                        };
+                        AirHockeyGameState newState = new AirHockeyGameState(roomId, config);
+                        Vector2 initPuckCoordinate = config.GetInitPuckCoordinate();
+                        newState.puck.coordinate.SetX(initPuckCoordinate.x);
+                        newState.puck.coordinate.SetY(initPuckCoordinate.y);
                         newState.SetPaddle1(new PaddleState(playerId));
                         if (newState.paddle1 == null) return Results.BadRequest();
                         bool addStateSuccess = _gameStateRepository.AddGameState(roomId, newState);
@@ -103,6 +118,10 @@ namespace nm_be_web_games.Controllers
                             _gameStateRepository.RemoveGameState(roomId);
                             return Results.BadRequest();
                         }
+
+                        string gameConfigJson = JsonSerializer.Serialize(new WSMessageInit { config = config });
+                        byte[] message = Encoding.UTF8.GetBytes(gameConfigJson);
+                        await webSocket.SendAsync(new ArraySegment<byte>(message), WebSocketMessageType.Text, true, CancellationToken.None);
                         var broadCastFunc = RunBroadcastLoop;
                         var parameters = new GameStateTaskParameters { Id = roomId, Cts = new CancellationTokenSource(), StateId = roomId };
                         bool addTaskSuccess = _taskManager.StartTask(broadCastFunc, parameters);
@@ -112,19 +131,6 @@ namespace nm_be_web_games.Controllers
                             _webSocketRepository.RemoveWebSocket(playerId);
                             return Results.BadRequest();
                         }
-                        string gameConfigJson = JsonSerializer.Serialize(
-                           new WSMessageInit
-                           {
-                               config = new AirHockeyGameConfig
-                               {
-                                   roomId = roomId,
-                                   playerId = playerId,
-                                   playerType = newState.GetAirHockeyPlayerType(playerId),
-                                   tickrate = _tickInterval,
-                               }
-                           });
-                        byte[] message = Encoding.UTF8.GetBytes(gameConfigJson);
-                        await webSocket.SendAsync(new ArraySegment<byte>(message), WebSocketMessageType.Text, true, CancellationToken.None);
                         socketReturnHandled = await HandleWebSocketRequest(webSocket, newState.id, newState.paddle1.id);
                     }
                 }
@@ -156,18 +162,12 @@ namespace nm_be_web_games.Controllers
                         PaddleState? newPaddleState = JsonSerializer.Deserialize<PaddleState>(message);
                         if (newPaddleState != null)
                         {
-                            await _gameStateRepository.UpdateGameState(stateId, (currentState) =>
-                             {
-                                 PaddleState? paddleState = currentState.GetPaddleState(paddleStateId);
-                                 if (paddleState != null)
-                                 {
-                                     paddleState.coordinate.SetX(newPaddleState.coordinate.x);
-                                     paddleState.coordinate.SetY(newPaddleState.coordinate.y);
-                                     paddleState.velocity.SetVX(newPaddleState.velocity.vX);
-                                     paddleState.velocity.SetVY(newPaddleState.velocity.vY);
-                                 }
-                                 return Task.CompletedTask;
-                             });
+                            AirHockeyGameState? state = _gameStateRepository.GetGameState(stateId);
+                            if (state != null)
+                            {
+                                PaddleState? paddleState = state.GetPaddleState(paddleStateId);
+                                paddleState?.CalculateCoordinateVelocity(newPaddleState.coordinate, _tickInterval);
+                            }
                         }
                     }
                     catch (Exception ex)
@@ -209,12 +209,12 @@ namespace nm_be_web_games.Controllers
                     {
                         AirHockeyGameState? state = _gameStateRepository.GetGameState(parameters.StateId);
                         if (state == null) break;
+                        state.CalculateState();
                         var paddle1 = state.paddle1;
                         var paddle2 = state.paddle2;
                         WebSocket? webSocket1 = paddle1 != null ? _webSocketRepository.GetWebSocket(paddle1.id) : null;
                         WebSocket? webSocket2 = paddle2 != null ? _webSocketRepository.GetWebSocket(paddle2.id) : null;
                         if (webSocket1?.State != WebSocketState.Open && webSocket2?.State != WebSocketState.Open) break;
-
                         string gameStateJson = JsonSerializer.Serialize(new WSMessageGameState { state = state });
                         byte[] message = Encoding.UTF8.GetBytes(gameStateJson);
 

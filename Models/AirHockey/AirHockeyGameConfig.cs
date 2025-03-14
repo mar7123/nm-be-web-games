@@ -6,15 +6,25 @@ public enum AirHockeyPlayerType { PLAYER_1, PLAYER_2 }
 
 public class AirHockeyGameConfig
 {
-    public required String roomId { get; set; }
-    public required String playerId { get; set; }
+    public required string roomId { get; set; }
+    public required string playerId { get; set; }
 
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public AirHockeyPlayerType playerType { get; set; }
-    public int tickrate { get; set; }
+    public required int tickInterval { get; set; }
+    public float puckResistance { get; set; } = 0.99f;
     public float airHockeyTableWidth { get; set; } = 500;
     public float airHockeyTableHeight { get; set; } = 1000;
     public float paddleSize { get; set; } = 80;
     public float puckSize { get; set; } = 50;
     public float goalWidthScale { get; set; } = 0.5F;
+
+    public Vector2 GetInitPuckCoordinate()
+    {
+        return new Vector2(airHockeyTableWidth / 2, airHockeyTableHeight / 2);
+    }
+    public float GetPaddlePuckIntersectLength()
+    {
+        return (paddleSize + puckSize) / 2;
+    }
 }
