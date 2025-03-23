@@ -14,7 +14,7 @@ namespace nm_be_web_games.Controllers
 {
     public class WebSocketController : ControllerBase
     {
-        private static readonly int _tickRate = 50;
+        private static readonly int _tickRate = 60;
         private static readonly int _tickInterval = 1000 / _tickRate;
         private readonly WebSocketRepository _webSocketRepository;
         private readonly GameStateRepository _gameStateRepository;
@@ -46,6 +46,8 @@ namespace nm_be_web_games.Controllers
                         if (paddleState == null)
                         {
                             paddleState = new PaddleState(playerId);
+                            Vector2 paddleCoordinate = state.config.GetInitPlayer2Coordinate();
+                            paddleState.SetCoordinate(paddleCoordinate);
                             bool registerNewPaddleSuccess = false;
                             await _gameStateRepository.UpdateGameState(roomId, (currentState) =>
                               {
@@ -55,7 +57,6 @@ namespace nm_be_web_games.Controllers
                             if (!registerNewPaddleSuccess)
                             {
                                 return Results.BadRequest();
-
                             }
                         }
                         Log.Logger.Information($"room {roomId} continued.");
@@ -70,17 +71,7 @@ namespace nm_be_web_games.Controllers
                                 return Results.BadRequest();
                             }
                         }
-                        AirHockeyGameConfig config = new AirHockeyGameConfig
-                        {
-                            roomId = roomId,
-                            playerId = playerId,
-                            playerType = state.GetAirHockeyPlayerType(playerId),
-                            tickInterval = _tickInterval,
-                        };
-
-                        string gameConfigJson = JsonSerializer.Serialize(new WSMessageInit { config = config });
-                        byte[] message = Encoding.UTF8.GetBytes(gameConfigJson);
-                        await webSocket.SendAsync(new ArraySegment<byte>(message), WebSocketMessageType.Text, true, CancellationToken.None);
+                        await SendGameConfig(webSocket, state);
                         Log.Logger.Information($"Client {paddleState.id} connected.");
                         if (!_taskManager.IsTaskRunning(roomId))
                         {
@@ -95,15 +86,11 @@ namespace nm_be_web_games.Controllers
                         Log.Logger.Information($"room {roomId} started.");
                         AirHockeyGameConfig config = new AirHockeyGameConfig
                         {
-                            roomId = roomId,
-                            playerId = playerId,
-                            playerType = AirHockeyPlayerType.PLAYER_1,
                             tickInterval = _tickInterval,
                         };
                         AirHockeyGameState newState = new AirHockeyGameState(roomId, config);
                         Vector2 initPuckCoordinate = config.GetInitPuckCoordinate();
-                        newState.puck.coordinate.SetX(initPuckCoordinate.x);
-                        newState.puck.coordinate.SetY(initPuckCoordinate.y);
+                        newState.puck.SetCoordinate(initPuckCoordinate);
                         newState.SetPaddle1(new PaddleState(playerId));
                         if (newState.paddle1 == null) return Results.BadRequest();
                         bool addStateSuccess = _gameStateRepository.AddGameState(roomId, newState);
@@ -118,10 +105,7 @@ namespace nm_be_web_games.Controllers
                             _gameStateRepository.RemoveGameState(roomId);
                             return Results.BadRequest();
                         }
-
-                        string gameConfigJson = JsonSerializer.Serialize(new WSMessageInit { config = config });
-                        byte[] message = Encoding.UTF8.GetBytes(gameConfigJson);
-                        await webSocket.SendAsync(new ArraySegment<byte>(message), WebSocketMessageType.Text, true, CancellationToken.None);
+                        await SendGameConfig(webSocket, newState);
                         var broadCastFunc = RunBroadcastLoop;
                         var parameters = new GameStateTaskParameters { Id = roomId, Cts = new CancellationTokenSource(), StateId = roomId };
                         bool addTaskSuccess = _taskManager.StartTask(broadCastFunc, parameters);
@@ -140,6 +124,14 @@ namespace nm_be_web_games.Controllers
                 }
             }
             return socketReturnHandled ? null : Results.BadRequest();
+        }
+
+        private async Task SendGameConfig(WebSocket webSocket, AirHockeyGameState state)
+        {
+
+            string gameConfigJson = JsonSerializer.Serialize(new WSMessageInit { config = state.config });
+            byte[] message = Encoding.UTF8.GetBytes(gameConfigJson);
+            await webSocket.SendAsync(new ArraySegment<byte>(message), WebSocketMessageType.Text, true, CancellationToken.None);
         }
 
         private async Task<bool> HandleWebSocketRequest(WebSocket webSocket, string stateId, string paddleStateId)
@@ -166,7 +158,7 @@ namespace nm_be_web_games.Controllers
                             if (state != null)
                             {
                                 PaddleState? paddleState = state.GetPaddleState(paddleStateId);
-                                paddleState?.CalculateCoordinateVelocity(newPaddleState.coordinate, _tickInterval);
+                                paddleState?.UpdateCoordinate(newPaddleState.coordinate);
                             }
                         }
                     }

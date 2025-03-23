@@ -17,17 +17,19 @@ public class Vector2
         this.y = y;
     }
     public Vector2() { }
-    public void SetX(float x)
+
+    public Vector2 Clone()
     {
-        this.x = x;
+        return new Vector2(x, y);
     }
-    public void SetY(float y)
+    public void UpdateValue(Vector2 newValue)
     {
-        this.y = y;
+        x = newValue.x;
+        y = newValue.y;
     }
     public float DistanceTo(Vector2 other)
     {
-        return (float)Math.Sqrt(Math.Pow(x - other.x, 2) + Math.Pow(y - other.y, 2));
+        return (float)(this - other).Magnitude();
     }
     public float Dot(Vector2 other)
     {
@@ -42,8 +44,12 @@ public class Vector2
         }
         return new Vector2(x / magnitude, y / magnitude);
     }
+    public float SquaredMagnitude()
+    {
+        return (float)(x * x) + (y * y);
+    }
     public float Magnitude()
     {
-        return (float)Math.Sqrt((x * x) + (y * y));
+        return (float)Math.Sqrt(SquaredMagnitude());
     }
 }

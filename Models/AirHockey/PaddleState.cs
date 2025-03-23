@@ -9,17 +9,8 @@ public class PaddleState : PuckState
     {
         this.id = id;
     }
-    public void CalculateCoordinateVelocity(Vector2 newCoordinate, int dt)
-    {
-        Vector2 delta = newCoordinate - coordinate;
-        coordinate.SetX(newCoordinate.x);
-        coordinate.SetY(newCoordinate.y);
-        velocity.SetX(delta.x / dt);
-        velocity.SetY(delta.y / dt);
-
-    }
     [JsonConstructor]
-    public PaddleState(string id, Vector2 coordinate, Vector2 velocity) : base(coordinate, velocity)
+    public PaddleState(string id, Vector2 coordinate) : base(coordinate)
     {
         this.id = id;
     }

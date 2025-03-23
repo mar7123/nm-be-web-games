@@ -1,3 +1,4 @@
+using System.Numerics;
 using System.Text.Json.Serialization;
 using Serilog;
 
@@ -67,53 +68,117 @@ public class AirHockeyGameState
         }
         return false;
     }
-    private void CalculatePuckImpact(AirHockeyGameConfig config, PaddleState paddleState)
+    private (Vector2?, Vector2?) GetDistanceRPoints(Vector2 A1, Vector2 A2, Vector2 B1, Vector2 B2, float r)
+    {
+        Vector2 d1 = A2 - A1;  // Direction vector of object 1
+        Vector2 d2 = B2 - B1;  // Direction vector of object 2
+
+        // Quadratic equation coefficients
+        float A = d1.SquaredMagnitude() + d2.SquaredMagnitude() - 2 * (d1.x * d2.x + d1.y * d2.y);
+        float B = 2 * ((A1.x - B1.x) * (d1.x - d2.x) + (A1.y - B1.y) * (d1.y - d2.y));
+        float C = (A1 - B1).SquaredMagnitude() - r * r;
+
+        // Solve for t using quadratic formula
+        float discriminant = B * B - 4 * A * C;
+
+        if (discriminant < 0)
+        {
+            return (null, null);  // No valid solutions
+        }
+
+        float sqrtDiscriminant = (float)Math.Sqrt(discriminant);
+        float t1 = (-B - sqrtDiscriminant) / (2 * A);
+        float t2 = (-B + sqrtDiscriminant) / (2 * A);
+
+        float t = -1;
+        if (t1 >= 0 && t1 <= 1 && t2 >= 0 && t2 <= 1)
+        {
+            t = Math.Min(t1, t2);
+        }
+        else if (t1 >= 0 && t1 <= 1)
+        {
+            t = t1;
+        }
+        else if (t2 >= 0 && t2 <= 1)
+        {
+            t = t2;
+        }
+        if (t == -1)
+        {
+            return (null, null);
+        }
+        t *= 1.001f;
+
+        return (A1 + d1 * t, B1 + d2 * t);
+    }
+    private void CalculatePuckImpact(PaddleState paddleState)
     {
         Vector2 diff = puck.coordinate - paddleState.coordinate;
         double distance = diff.Magnitude();
         double collisionDistance = config.GetPaddlePuckIntersectLength();
-        if (distance < collisionDistance)
+
+        if (distance < collisionDistance) // Check for collision
         {
-            Vector2 normal = diff.Normalize();
+            Vector2 normal = diff.Normalize();  // Get the normal of collision
             Vector2 relativeVelocity = puck.velocity - paddleState.velocity;
             double velocityDot = relativeVelocity.Dot(normal);
-            if (velocityDot < 0)
+
+            if (velocityDot < 0) // Ensure collision is meaningful
             {
+                // Reflect puck velocity correctly
                 Vector2 reflectedVelocity = puck.velocity - normal * (2 * velocityDot);
-                Vector2 paddleInfluence = paddleState.velocity;
-                Vector2 puckSpeed = reflectedVelocity + paddleInfluence;
-                puck.velocity.SetX(puckSpeed.x);
-                puck.velocity.SetY(puckSpeed.y);
+
+                // Apply paddle influence in a smoother way
+                Vector2 paddleInfluence = paddleState.velocity * 0.2; // Reduce factor for stability
+
+                // Update the puck's velocity
+                Vector2 newPuckVelocity = reflectedVelocity + paddleInfluence;
+                puck.velocity.UpdateValue(newPuckVelocity);
+
+                // Move puck slightly out of collision zone to prevent overlap
+                Vector2 newCoordinate = puck.coordinate + (normal * (collisionDistance - distance + 0.1));
+                puck.coordinate.UpdateValue(newCoordinate);
             }
         }
     }
 
     public void CalculateState()
     {
+        // Update paddles' velocities first
         if (paddle1 != null)
         {
-            CalculatePuckImpact(config, paddle1);
+            paddle1.UpdateVelocity(config.tickInterval);
+            CalculatePuckImpact(paddle1);
         }
         if (paddle2 != null)
         {
-            CalculatePuckImpact(config, paddle2);
+            paddle2.UpdateVelocity(config.tickInterval);
+            CalculatePuckImpact(paddle2);
         }
-        Vector2 newPuckVelocity = puck.velocity * (float)Math.Pow(config.puckResistance, config.tickInterval);
-        puck.velocity.SetX(newPuckVelocity.x);
-        puck.velocity.SetY(newPuckVelocity.y);
-        Vector2 newCoordinate = puck.coordinate + (puck.velocity * config.tickInterval);
-        puck.coordinate.SetX(newCoordinate.x);
-        puck.coordinate.SetY(newCoordinate.y);
 
+        // Apply friction properly
+        float resistanceFactor = (float)Math.Pow(config.puckResistance, config.tickInterval);
+        Vector2 newPuckVelocity = puck.velocity * resistanceFactor;
+
+        // Update puck velocity and position
+        puck.velocity.UpdateValue(newPuckVelocity);
+        Vector2 newCoordinate = puck.coordinate + (puck.velocity * config.tickInterval);
+        puck.UpdateCoordinate(newCoordinate);
+
+        // Boundary collision handling (walls)
         if (puck.coordinate.x - config.puckSize / 2 < 0 || puck.coordinate.x + config.puckSize / 2 > config.airHockeyTableWidth)
         {
-            puck.velocity.SetX(-puck.velocity.x);
-            puck.coordinate.SetX(Math.Clamp(puck.coordinate.x, config.puckSize / 2, config.airHockeyTableWidth - config.puckSize / 2));
+            puck.velocity.UpdateValue(new Vector2(-puck.velocity.x * 0.9f, puck.velocity.y)); // Reduce speed slightly on bounce
+            puck.coordinate.UpdateValue(new Vector2(
+                Math.Clamp(puck.coordinate.x, config.puckSize / 2, config.airHockeyTableWidth - config.puckSize / 2),
+                puck.coordinate.y));
         }
         if (puck.coordinate.y - config.puckSize / 2 < 0 || puck.coordinate.y + config.puckSize / 2 > config.airHockeyTableHeight)
         {
-            puck.velocity.SetY(-puck.velocity.y);
-            puck.coordinate.SetY(Math.Clamp(puck.coordinate.y, config.puckSize / 2, config.airHockeyTableHeight - config.puckSize / 2));
+            puck.velocity.UpdateValue(new Vector2(puck.velocity.x, -puck.velocity.y * 0.9f)); // Reduce speed slightly on bounce
+            puck.coordinate.UpdateValue(new Vector2(
+                puck.coordinate.x,
+                Math.Clamp(puck.coordinate.y, config.puckSize / 2, config.airHockeyTableHeight - config.puckSize / 2)));
         }
     }
 }
